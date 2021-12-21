@@ -1,0 +1,85 @@
+---
+title: "Assign 2"
+author: "Eduard Shokur"
+date: "2/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(pairwiseCI)
+library(ggplot2)
+options(scipen = 99, digits = 2)
+
+```
+## 1. Fish Diet:
+
+ + A. This not an experiment or a retrospective study where history of risk factors to a disease was reviewed. Hence, this is prospective study because we study a group and collect data as events unfold.
+ + B. This is a test of independence because test of homogeneity would be testing if the proportion of people who developed prostate cancer was the same regardless of amount of fish consumed. In this problem, however, we are testing, if there is association between amount of fish consumed prostate cancer.
+ 
+ ``` {r} 
+ #instead of creating a CSV, I manually typed in data using the code i found in documentation On R's site
+tempTable <- as.table(rbind(c(110,2420,2769,507), c(14,201,209,42)))
+dimnames(tempTable) <- list(Outcome = c("Cancer", "No_Cancer"),
+                    Part_of_Diet = c("None"," Small Part of Diet", "Moderate Part", "Large Part"))
+
+  # gives chisquare statistics
+indFitTest <- chisq.test(tempTable)
+  # vector of residuals
+residuals <-indFitTest$stdres
+
+ ```
+ + C. My NULL hypothesis is that there is no association between the amount of fish consumed and risk of developing prostate cancer. By alternative hypothesis, there is an association between amount of fish consumed and prostate cancer. Based on the Chi-Squared test's large p-value of `r indFitTest$p.value`, I fail to reject the NULL hypothesis. Also, standardized residuals are small. I do not see evidence for association between cancer risk and fish.
+ 
+ + D. This study is not an experiment; therefore no causality can be inferred. Furthermore, if there was some causal relationship between amount of fish in diet, we might expect to see some indication of that in the relative risk proportions. In other words, as the amount of fish in diet becomes smaller (or larger, if that is what decreases cancer risk), the relative risk proportion should move accordingly. As can be seen in part E, no such connection between diet and relative risk proportion exists. 
+  ``` {r}
+  #pairwiseCI does not accept data that is not a data frame so the next line of code converts it to data frame
+dataFrameTempTable <- tibble(Treatment=c("None","Small","Moderate", "Large"),Yes=tempTable[2,],No=tempTable[1,])
+  #plot of pairwise control vs each group relative risk graphed
+rr.fish <- pairwiseCI(cbind(Yes,No)~Treatment,data=dataFrameTempTable,method="Prop.ratio",
+CImethod="Score",conf.level=1-.05/4, control="None")
+plotCI(rr.fish,lines=1,CIvert=TRUE,ylab="Confidence Interval of Relative Cancer Risk", main="Relative Risk by Amount of Fish in Diet")
+
+ ```
+ 
+ + E. We have a 95% (simultaneous) confidence that compared to a group that consumes no fish, group of subjects that consumes large, moderate and small amounts of fish are `r rr.fish$byout[[1]]$lower[1]` to `r rr.fish$byout[[1]]$upper[1]`, `r rr.fish$byout[[1]]$lower[2]` to `r rr.fish$byout[[1]]$upper[2]` and `r rr.fish$byout[[1]]$lower[3]` to `r rr.fish$byout[[1]]$upper[3]` times as likely to develop cancer respectively. 
+ 
+ 
+## 2:
+``` {r,fig.show='hold',out.width='50%'}
+BodyFat <- read_csv("Body_fat_complete.csv")
+ggplot(BodyFat,aes(x=Waist,y=Pct.BF))+geom_point()+ ggtitle("Percent Body Fat vs Waist Size With LS Line") + #plot points
+        theme(plot.title = element_text(hjust = 0.50)) + # centers the title
+#geom_smooth(se=FALSE, color="blue",linetype=2)+ # add loess smooth
+geom_smooth(method=lm,se=FALSE)+ # add LS line
+labs(y="% Body Fat",x="Waist Size")
+########################################################
+resLine <- lm(Pct.BF~Waist, data=BodyFat)  # residual least squares plot line
+#summary(resLine)
+#dotplot of residuals
+ggplot(BodyFat,aes(x=Waist,y=resid(resLine))) + geom_point() + ggtitle("Plot of Residuals") + #plot points and add title
+        theme(plot.title = element_text(hjust = 0.5)) + # centers the title 
+geom_hline(yintercept=0,linetype="dashed") # residual plot
+resid <- resid(resLine)  # predicted - actual
+hist(resid, main = "Histogram of Residuals") #hisogram of the residuals
+qqnorm(resid,main="Normal Q-Q Plot of Residuals")
+qqline(resid)
+# data frame with prediction value based on whcih prediction interval will be made
+predictionConfValuesDF <- data.frame(Waist=c(40))
+# gives confidence interval for prediction of mean
+predictdMuInt <- predict(resLine,newdata=predictionConfValuesDF,interval="confidence") # m1 contains lm fit
+# gives confidence interval for prediction of prediction interval
+predictInt <- predict(resLine,newdata=predictionConfValuesDF,interval="prediction") # m1 contains lm fit
+```
+
++ A. The "straight enough" condition is satisfied. The residual plot shows random distribution of residuals. Histogram of residuals is asymmetric. If we use t procedures, because the sample size is quite large, assumptions are satisfied well enough.
+
+ + B. The slope of the LS line of the model is `r coef(resLine)[2]`. This means that for every additional inch of waist, the mean body fat increases by `r coef(resLine)[2]` percent. We are 95% confident that for every additional inch of waist size, the mean percent body fat goes up by anywhere between `r confint(resLine)[2]` and `r confint(resLine)[4]` inches.
+ 
+ + C. Based on the model made, on average a man with 40 inch waist has an estimated body composition that is `r predictdMuInt[1]` percent fat .
+ 
+ + D. Based on the model made, the man with 40 inch waist has an estimated body composition that is `r predictInt[1]` percent fat . I am 95% confident that the same man (individual) has an estimated body composition of anywhere between `r predictInt[2]` and `r predictInt[3]` percent body fat.
+ 
+ 

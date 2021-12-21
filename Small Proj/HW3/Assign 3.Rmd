@@ -1,0 +1,202 @@
+---
+author: "Eduard Shokur"
+date: "2/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE)
+library(tidyverse)
+library(kableExtra)
+library(pairwiseCI)
+library(ggplot2)
+library(doBy)
+library(GGally)
+library(coin)
+options(scipen = 99, digits = 4)
+```
+
+# Problem 1 (R7.12 Page 903):
+
++ A). Sample size is small. There is a weak, positive, linear association between years since 1900 and cost of building a power plant. Similar association is observed between size of power plants in megawatts and cost.
+
+``` {r} 
+nuclearPowerStations <- read_csv("NuclearPlants.csv")
+
+
+ggpairs(select(nuclearPowerStations, Date, Mwatts, Cost))
+
+```
+
++ B). 
+
+``` {r} 
+# cost vs Mwatts plots
+# regression plot of cost on Mwatts
+ggplot(nuclearPowerStations, aes(x = Mwatts, y = Cost)) + geom_point() +
+  geom_smooth(method=lm,se=FALSE) + # add LS line
+  labs(title="Mwatts vs Cost", x="")
+#model used in part B and C; models regression of Mwatts on Cost
+LSLineDate <- lm(Cost~Date,data=nuclearPowerStations)
+LSLineMwatts <- lm(Cost~Mwatts,data=nuclearPowerStations)
+# multiple regression of Mwatts and Date on Cost; used later in part D and on
+RegressionModelMwattsDate <- lm(Cost~Mwatts + Date,data=nuclearPowerStations)
+
+```
+
++ B). 
+On average, every megawatt increase in power output capability of a power plant is associated with  additional cost of `r LSLineMwatts$coefficients[2] * 100000` dollars.
+
+
++ C). 
+``` {r, fig.show='hold',out.width='50%'} 
+
+# cost vs date plots
+# dot plot of cost vs date
+#ggplot(nuclearPowerStations, aes(x = Date, y = Cost)) + geom_point() +
+ # geom_smooth(method=lm,se=FALSE) + # add LS line
+  #labs(title="Years Since 1900 vs Cost", x="")
+LSLineDate <- lm(Cost~Date,data=nuclearPowerStations)
+ # residual plots cost vs date since 1900
+ggplot(NULL,aes(x=predict(LSLineDate),y=resid(LSLineDate))) + geom_point() +
+  geom_hline(yintercept=0) + labs(title="Residual plot Years Since 1900 vs Cost")
+# Residuals histogram cost vs date since 1900
+ggplot(NULL,aes(x=resid(LSLineDate))) + geom_histogram(color='white',binwidth=40) +
+  labs(title="Histogram of residuals Years Since 1900 vs Cost", x="")
+
+# Mwatts vs residuals analysis
+
+# residual plots Mwatts vs cost since
+ggplot(NULL,aes(x=predict(LSLineMwatts),y=resid(LSLineMwatts))) + geom_point() +
+  geom_hline(yintercept=0) + labs(title="Residual plot Mwatts vs Cost")
+# Histogram of residuals for Mwatts vs Cost
+ggplot(NULL,aes(x=resid(LSLineMwatts))) + geom_histogram(color='white',binwidth=40) +
+  labs(title="Histogram of residuals for Mwatts vs Cost", x="")
+
+```
+
++ C). Linearity assumption means that mean value of a response variable is linearly associated with explanatory variables in the model. This seems to be satisfied. I am not sure about collection methods so independence can not be assumed. Constant variance is in doubt because as seen in the of the residuals and in part A of this assignment, residuals are clustered in groups of two or three. Normality is also not satisfied. Histogram of residuals is multimodal and skewed to the right; with sample size 32, we might still be able to use t-procedures because we don't have any large outliers.
++ D). Coefficient of slope is zero by null hypothesis. In a simple regression of Mwatts on Cost the p-value for the null hypothesis is `r summary(LSLineMwatts)$coefficients[8] `. Therefore, I reject the null hypothesis that there is no relationship between power and cost.
+``` {r} 
+PredictMwats1000 <- data.frame(Mwatts =c(1000))
+MWattsCostPrediction <- predict(LSLineMwatts,newdata=PredictMwats1000,interval="prediction")
+# r squared calculation for SLR
+SLRRsqred <- summary(LSLineMwatts)$r.squared * 100
+```
++ E). The predicted cost of a 1000-mwatt plan is $`r MWattsCostPrediction[1,1] * 100000`. 
++ F). The residual in this model is `r sigma(LSLineMwatts)`. The R-squared means that model explains `r SLRRsqred`% of variation in the costs of building a power plant. I think Date may explain some variations in the model, but it is becoming painfully obvious that there is a relationship between residuals, making results of this analysis suspect. The plot of residuals vs date suggests a lurking variable.
+```{r} 
+
+ggplot(nuclearPowerStations,aes(x=Date,y=resid(LSLineMwatts))) + geom_point() +
+  geom_hline(yintercept=0) + labs(title="Residual VS Date")
+```
+
++ G). The Mwatts coefficient is `r summary(RegressionModelMwattsDate)$coefficients[2]` and `r summary(RegressionModelMwattsDate)$coefficients[3]` for Date. The coefficients in this multiple regression model are almost exactly the same as those in simple linear regression model. 
+
++ H). I expect Mwatts and Date to be correlated. With time, power plants probably got increasingly powerful. Due to increased safety regulations, as the time went on, the cost went up for all power plants regardless of size; therefore date can probably explain same information that size can explain.
+
+``` {r}
+# plot Cost~Date vs Cost~Mwatts
+ggplot(NULL,aes(x=predict(LSLineMwatts),y=predict(LSLineDate))) + geom_point()
+```
+
+## Problem 2:
+
+``` {r, fig.show='hold',out.width='50%'} 
+LoggingData <- read_csv("Logging.csv")
+# make group a factor
+LoggingData <- mutate(LoggingData, group = as_factor(group))
+
+LoggingData <- mutate(LoggingData,group=fct_recode(group, NeverLogged='1', Logged1YearAgo = '2', Logged8YearsAgo = '3'))
+ggplot(LoggingData, aes(x = group, y = trees)) + geom_boxplot() +
+labs(title="Number of Trees by Plot Type", y="Number of Trees", x="Plot Type")
+ggplot(LoggingData, aes(x = group, y = species)) + geom_boxplot() +
+labs(title="Number of Species by Plot Type", y="Number of Species", x="Plot Type")
+treesSummary <-summaryBy(trees~group, data=LoggingData, FUN=c(length, mean, median, sd, IQR))
+speciesSummary <- summaryBy(species~group, data=LoggingData, FUN=c(length, mean, median, sd, IQR))
+kable(treesSummary, format = "html", table.attr="style='width:20%'", caption = "<center><stron>Number of Trees by Plot Type</strong></center>") %>%
+  kable_styling(bootstrap_options = "striped",
+                full_width = F)
+kable(speciesSummary, format = "html", table.attr="style='width:20%'", caption = "<center><stron>Number of Species by Plot Type</strong></center>") %>%
+  kable_styling(bootstrap_options = "striped")
+neverLogged <- filter(LoggingData, group == "NeverLogged")
+logged1YearAgo <- filter(LoggingData, group == "Logged1YearAgo")
+logged8YearsAgo <-filter(LoggingData, group =="Logged8YearsAgo")
+
+# anova model for trees + species on group
+anovaSpeciesTrees <- aov(formula = (trees + species) ~ group, data = LoggingData)
+summanovaSpeciesTrees <-summary(anovaSpeciesTrees)
+# To keep the report from getting too lengthy, I am not including this plot
+#ggplot(LoggingData,aes(x=group,y=resid(anovaSpeciesTrees))) + geom_boxplot()
+
+```
+
++ Assumptions:
+To know if ANOVA analysis is appropriate, the plots will need to be random samples or experiments, have equal variance and normal population distribution. Because the plots were randomly chosen, the random samples assumption is satisfied. As seen from the boxplot and the tables above, our groups sizes are nearly equal and equal variance is nearly satisfied with only one group (plots logged 1 year ago) showing slightly less variance then the other groups. 
+
+If the sample sizes were larger I could bootstrap to check for normality. As is, I will only check sample distribution and hope that it is representative of the population and normal.
+
+``` {r, fig.show='hold',out.width='50%'} 
+# sample distribtuion: number of trees in plot Never logged
+ggplot(neverLogged,aes(x=trees)) + geom_histogram(color='white',binwidth=1.5) +
+  labs(title="Number of Trees in Never Logged Plot", x="", y="Number of Trees")
+ggplot(neverLogged,aes(x=species)) + geom_histogram(color='white',binwidth=1.5) +
+  labs(title="Number of Species in Never Logged Plot", x="", y="Number of Species")
+# sample distribution: in plot logged 1 year ago
+ggplot(logged1YearAgo,aes(x=trees)) + geom_histogram(color='white',binwidth=1.5) +
+  labs(title="Number of Trees in a Plot Logged One Year Ago", x="", y="Number of Trees")
+ggplot(logged1YearAgo,aes(x=species)) + geom_histogram(color='white',binwidth=1.5) +
+  labs(title="Number of Species in a Plot Logged One Year Ago", x="", y="Number of Species")
+# sample distribution: in plot logged 8 years ago
+ggplot(logged8YearsAgo,aes(x=trees)) + geom_histogram(color='white',binwidth=1.5) +
+  labs(title="Number of Trees in a Plot Logged Eight Years Ago", x="", y="Number of Species")
+ggplot(logged8YearsAgo,aes(x=species)) + geom_histogram(color='white',binwidth=1.5) +
+  labs(title="Number of Species in a Plot Logged Eight Years Ago", x="", y="Number of Trees")
+ggplot(LoggingData,aes(x=trees)) + geom_histogram(color='white',binwidth=1.5) +
+  labs(title="Number of Trees Distribution From All Plots", x="", y="Number of Trees")
+ggplot(LoggingData,aes(x=species)) + geom_histogram(color='white',binwidth=1.5) +
+  labs(title="Number of Species Distribution From All Plots", x="", y="Number of Trees")
+
+
+# anova model for species on group
+anovaSpecies <- aov((species) ~ group, data = LoggingData)
+
+# anova model for trees on group
+anovaTrees <- aov((trees) ~ group, data = LoggingData)
+
+# pooled residual plot
+ggplot(NULL,aes(x=predict(anovaSpeciesTrees),y=resid(anovaSpeciesTrees))) + geom_jitter(width=0.02,height=0.04) +
+geom_hline(yintercept=0) + labs(title="Pooled Residual plot")
+# pooled normal probability plot
+ggplot(NULL,aes(sample=resid(anovaSpeciesTrees))) + geom_qq() + geom_qq_line() +
+labs(title="Pooled Normal Probability Plot of Residuals")
+
+```
++ The sample sizes are way too small; the normality assumption is not satisfied on individual plots. Since the variance assumption seems to be satisfied, I pooled the plot types and found that the distribution of trees and species among all plots is roughly mound shaped and slightly left skewed. If equal variance assumption holds, then we can proceed with caution with our normality assumption.
+
+ **Evaluate whether the data provide evidence that the mean number
+of species and the mean number of trees are different across the three populations: **
+
+
+
+``` {r}
+pairWiseConfInterval.frame <-TukeyHSD(anovaSpeciesTrees)
+kable(pairWiseConfInterval.frame[["group"]])
+```
++ The null hypothesis states that the means across different plots are the same. Because of a tiny p-value of `r summanovaSpeciesTrees[[1]][["Pr(>F)"]][1]`, I do not find enough evidence against null hypothesis. The confidence intervals for logged compared to not logged plots overlap closely. Therefore, I need more samples to conclude if there is any difference in means.
+
+
+``` {r}
+# Kruskal-Wallis test based on ranks species
+
+KWNumSpecTreesOnGroup <- kruskal.test((species + trees)~(group),data=LoggingData)
+# not assuming equal variance
+permutationOneWay <-oneway.test(species + trees~group,data=LoggingData)
+
+````
+The p-value for Kruskal rank test is `r KWNumSpecTreesOnGroup[["p.value"]]`. 
+The oneway permutation value is: `r permutationOneWay[["p.value"]]`. Both are quite similar to the anova p value of `r summanovaSpeciesTrees[[1]][["Pr(>F)"]][1]`.
+
+## Problem 3:
++ Because there is a larger difference between areas never logged and areas logged just a year ago compared to a difference between an area logged 8 years ago and area never logged, I conclude that the number of trees and species might indeed differ between these areas; however,the study sample is way too small and some assumptions are barely met. 
++ I think I would choose the second option because I could randomly assign which areas get logged and which don't, making a more representative sample and easier to balance my experiment for more accuracy with ANOVA tests. Honestly, if I could, none of them would get logged.

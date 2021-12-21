@@ -1,0 +1,152 @@
+---
+author: "Eduard Shokur"
+date: "1/23/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+options(scipen=99, digits=3)
+library(tidyverse)
+```
+
+## 16.7:
++ a). Provided the bootstrap method doesn't have a large bias and enough resamples are done, bootstrap standard error will tend to standard deviation of the population while the standard deviation of the sample is only based on one sample and will be larger
+
++ b). The bootstrap distribution is created by resampling the original sample **with** replacement, each sample size being the same size as the original sample.
++ c). **NO!** As stated above, the resample size must be same as the original sample.
++ d). If we resample from the population, we are creating sampling distribution, **not** bootstrap distribution. 
+
+## 16.16: 
+```{r}
+bootStrapSE <- 3.9
+bootStrapMu <-23.29 
+theoreticalSE <-3.99
+theoreticalMu <-23.26
+
+```
++ a). We know that the bootstrap mean is an unbiased estimator of the sample mean, in the long run. However, given the information in the book, the bootstrap mean bias is `r theoreticalMu - bootStrapMu`.
++ b). The bootstrap standard error is: `r bootStrapSE`.
++ c). Based on the theoretical numbers the 95% t confidence interval is: (`r theoreticalMu + c(-1,1)*qt(.975, 50-1)*theoreticalSE`).
+
+## 16.28: 
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(simpleboot)
+library(boot)
+source("SimpleBootFunctions.R")
+DBHdata <- read_csv('ex16-28nspines.csv') # read the file of DBH
+
+# dotted box plot
+boxPlotWithDots <- ggplot(DBHdata, aes(x=Section, y=DBH)) + 
+  geom_dotplot(binaxis='y',stackdir='center',dotsize=.75,fill="lightgray",color='white') +
+  labs(y = "Diamter at Breast Height (DBH) in Inches")  
+  
+boxPlotWithDots + geom_boxplot(alpha=0)  
+
+#boxPlotWithDots + geom_violin(alpha=0)  #more fancy boxed dotplots
+
+```
++ a). Based on the boxplots above, the sample distribution of height of trees on the North side is not normal; in addition to skewness to the right, the distribution also looks bimodal. Likewise, the sample distribution of tree heights on the south side is not normal and skewed left. The individual distributions are too skewed.
++ b). Based on the bootstrapping of differences of the samples from each section, I conclude that the bootstrap distribution of the difference of mean is normal and t-distribution can be used to find confidence interval.
+``` {r} 
+# separate DBH data into South and North group
+DBHS <- filter(DBHdata,Section=='S')
+DBHN <- filter(DBHdata,Section=='N')
+# bootstrap difference in mean GPA's
+bootStrappedDBHDiff <- two.boot(DBHS$DBH,DBHN$DBH,FUN=mean,R=10000)
+# sum.bt(bootStrappedDBHDiff) #I used this to double check that the next line is working correctly 
+#finds the mean that will be used in later calculations
+DBHDiffMean <- mean(DBHS$DBH,trim=0)-mean(DBHN$DBH,trim=0)
+
+plot.bt(bootStrappedDBHDiff)
+bootStrappedDBHDiffSDE <- sd(bootStrappedDBHDiff$t) #obtains bootstrap standard error for DBH differences between groups
+degFreedomDBH <-29
+confInt <-t.test(DBHS$DBH, DBHN$DBH)
+```
+
+  + c). The bootstrap standard error is `r round(bootStrappedDBHDiffSDE, 2)`. 
+  The 95% confidence interval is (`r round(DBHDiffMean + c(-1,1) * qt(.975, degFreedomDBH) * bootStrappedDBHDiffSDE, 2)`).  
+  + d). The confidence interval with two sample t confidence interval is which was caluclated using t.test is (`r round( confInt$conf.int,2)`).
+  
+## 16.31:
+
+``` {r} 
+MPGdata <- read_csv('ex16-31mpg20.csv') # read the file of MPGs
+mpgMPG <-MPGdata$MPG
+#find sample size 
+sampleSize <-length(mpgMPG)
+# find s of sample part a).
+sampleS <-sd(mpgMPG)
+# for part b 
+MuOfS <- one.boot(mpgMPG,function(x) sd(x),R=10000)
+SEofSDs <- sd(MuOfS$t)
+# used for part d
+#plot.bt(MuOfS)
+```
++ a). The sample standard deviation is `r round(sampleS,3)`.
++ b). The bootstrap Standard Error of is`r SEofSDs`. 
++ c). This means that the standard deviation calculation made by theoretical method in part a is very accurate because sample to sample standard deviation (here called standard error) varies only by such a small amount.
++ d). The distribution is mound shaped and unimodal but highly skewed to the left; therefore, t based confidence intervals will be highly inaccurate.
+
+## 16.50:
+``` {r} 
+GPA50 <- read_csv('ex16-50gpa.csv') # read the file of MPGs
+GPA50GPAF <-filter(GPA50,sex=='2')
+MuOfS <- one.boot(GPA50GPAF$GPA,function(x) mean(x),R=10000)
+SDofMuOfS <- sd(MuOfS$t)
+
+plot.bt(MuOfS)
+
+```
+
++ a). The bootstrap distribution of means is skewed slightly to the left. This means that t distribution can be off on the lower end. Otherwise, the graph appears normally distributed. At `r sum.bt(MuOfS)[3] `, the bias is small. T distribution can be used if the bias is small and the data is normally distributed. Since Student's distribution confidence intervals do not make up for bias or skewness, student's distribution should not be used if percentile and normal t  intervals differ too much,  data is skewed or bias is significant. With percentile distribution correcting for skewness, we can use the percentile distribution. BCa corrects for bias and skewness. Because the difference between t and percentile intervals is small and we don't have bias, it is fine to use percentile confidence interval.
++ b). The 95% confidence interval using normal t-distribution is ( `r boot.ci(MuOfS)$normal[2]`, `r boot.ci(MuOfS)$normal[3]`); percentile based interval is `r boot.ci(MuOfS)$percent[4]`, `r boot.ci(MuOfS)$percent[5]`); bca interval is `r boot.ci(MuOfS)$bca[4]`, `r boot.ci(MuOfS)$percent[5]`). 
+T distribution reaches out the same amount on both sides to find the 95% confidence interval because we have an extended tail on the left, it does not reach out far enough on the left and goes too far to the right. Percentile distribution corrects for the extended left tail and reaches further to the left but does not over extend to the right of the parameter. Yet if we have have a bias, percentile will not correct for it. 
+
+## 16.52: 
+``` {r} 
+GPA52 <- read_csv('ex16-52gpa.csv') # read the file of MPGs
+GPA52GPAs <-GPA52$GPA #vector of GPAs
+GPA52HighSchoolMathGrades <-GPA52$HSM #vector of highschool math grades
+
+# part b
+#ggplot(GPA52, aes(x=GPA, y = HSM)) + geom_point()
+
+
+```
+
++ a). The distributions of high school GPAs and high school math grades are unimodal, skewed to the left with no outliers present.
++ b). There is a weak positive associate between HSM and GPA but the association is not linear.
++ c).
+
+``` {r}
+bootStrappedRelatnHSMGPA <- two.bt(GPA52$GPA,GPA52$HSM,FUN=var,R=10000,ratio=FALSE) 
+plot.bt(bootStrappedRelatnHSMGPA)
+#boot.ci(bootStrappedRelatnHSMGPA)
+```
++ d). The bootstrap distribution of correlation between HSM and GPA is skewed to the left, unimodal and mound shaped. The bias is `r sum.bt(bootStrappedRelatnHSMGPA)[3] `. Because the bias is small, the use of percentile confidence interval is justified. T distribution intervals should not be used because distribution is skewed. 
++ e). Skipped! Thank you, Irish Kayla!
+
+16.66:
+``` {r} 
+brandPR <- read_csv('ex16-66brandpr.csv') # read the file of brandpr data
+# select primed group
+brandPRPrimed <- filter(brandPR, Primed== 'Yes')
+brandPRNotPrimed <- filter(brandPR, Primed== 'No')
+b <- two.boot(brandPRPrimed$Preference,brandPRNotPrimed$Preference,FUN=function(x) mean(x),R=10000)
+plot.bt(b)
+```
+
+ `r `. 
+``` {r}
+
+```
+
++ a). Based on the distribution of ratings, I think the two-sample t procedure can be used. The data is nearly normally distributed with a slight left skewness and sample size is 22.
+
++ b). I reject the null hypothesis that the difference of mean scores between the two groups is zero. The 95% confidence interval for the difference is: (`r t.test(brandPRPrimed$Preference,brandPRNotPrimed$Preference)$conf.int[1]` , `r t.test(brandPRPrimed$Preference,brandPRNotPrimed$Preference)$conf.int[2]`).
++ c). The t interval based on bootstrap simulations is `r boot.ci(b)$normal[2]`, `r boot.ci(b)$normal[3]`.
++ d). The difference of preference scores distribution is slightly skewed to the left. I think because the t interval, this is why have slightly different results.
